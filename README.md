@@ -6,6 +6,15 @@ focused window and add its title to the status line. I find that the
 increased visual feedback makes layouts with `pixel` or `none` borders
 more effective.
 
+If the focused window is in a layout, then the name will be prepended
+with the layouts of every container in the path from workspace down the
+tree to that window. For example, if a workspace contains an hsplit, and
+within that is a tabbed container, and within a tab is a vsplit
+containing the focused window, you would see `/H/T/V: <title of window>`.
+An empty workspace on its own will be displayed as `/`.
+
+# Motivation
+
 `i3status` is very good at what it does; let's not reimplement it.
 However, it is designed to be synchronous in order to reduce code
 complexity and resource usage, and intended to be used with intervals

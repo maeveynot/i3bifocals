@@ -16,6 +16,31 @@ EVENT_TYPES = (
 )
 
 
+types = {"workspace": "", "floating_con": "F"}
+layouts = {"splith": "H", "splitv": "V", "tabbed": "T", "stacked": "S"}
+fallback = "?"
+
+
+def format_con_name(con):
+    if con.type in types:
+        return types[con.type]
+    if con.nodes:
+        return layouts.get(con.layout, fallback)
+    return con.name
+
+
+def format_path_to_con(con, path=None):
+    if path is None: path = []
+
+    path.insert(0, format_con_name(con))
+
+    if con.type in ("con", "floating_con"):
+        return format_path_to_con(con.parent, path)
+    else:
+        leaf = path.pop()
+        return f"{'' if path else '/'}{'/'.join(path)}{': ' if path else ''}{leaf}"
+
+
 class i3Bifocals:
     def __init__(self, output):
         self.output = output
@@ -40,7 +65,7 @@ class i3Bifocals:
                 if p.type == "output" and p.name != self.output:
                     return
         orig_focused_name = self.focused_name
-        self.focused_name = focused.name if focused and focused.type == "con" else None
+        self.focused_name = format_path_to_con(focused)
         if self.focused_name != orig_focused_name:
             await self.print_blocks()
 
