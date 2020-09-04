@@ -11,8 +11,15 @@ from i3ipc import Event
 EVENT_TYPES = (
     Event.WINDOW_FOCUS,
     Event.WINDOW_TITLE,
-    Event.WINDOW_CLOSE, # closing last container on workspace
-    Event.WORKSPACE_FOCUS, # switching to new empty workspace
+    # closing last container on workspace
+    Event.WINDOW_CLOSE,
+    # switching to new empty workspace
+    Event.WORKSPACE_FOCUS,
+    # changing layout with the keyboard. unfortunately, if layout is modified
+    # by something other than a binding, we will not be notified, and will not
+    # know until another event or the next i3status tick. perhaps a "layout"
+    # event type could be added to the IPC spec.
+    Event.BINDING,
 )
 
 
@@ -56,6 +63,10 @@ class i3Bifocals:
         print(json.dumps(blocks, ensure_ascii=False) + ",", flush=True)
 
     async def update_focus(self, i3, event):
+        if event and event.change == "layout":
+            cmd, *args = event.binding.command.split()
+            if cmd not in ("split", "layout"):
+                return
         tree = await i3.get_tree()
         focused = tree.find_focused()
         if self.output:
