@@ -1,18 +1,28 @@
 #!/usr/bin/python3
 
 import sys
+import argparse
 import json
 import asyncio
 from i3ipc.aio import Connection
 from i3ipc import Event
 
 
+EVENT_TYPES = (
+    Event.WINDOW_FOCUS,
+    Event.WINDOW_TITLE,
+    Event.WINDOW_CLOSE, # closing last container on workspace
+    Event.WORKSPACE_FOCUS, # switching to new empty workspace
+)
+
+
 class i3Bifocals:
-    def __init__(self):
+    def __init__(self, output):
+        self.output = output
         self.status_blocks = []
         self.focused_name = None
 
-    def print_blocks(self):
+    async def print_blocks(self):
         focus_block = {
             "name": "focused_con",
             "full_text": self.focused_name or "-",
@@ -20,32 +30,26 @@ class i3Bifocals:
         blocks = [focus_block, *self.status_blocks]
         print(json.dumps(blocks, ensure_ascii=False) + ",", flush=True)
 
-    def handle_workspace_event(self, i3, event):
-        if event.current.find_focused() is None:
-            self.focused_name = None
-            self.print_blocks()
-
-    def handle_window_event(self, i3, event):
-        if event.change == "focus" or event.change == "title" and event.container.focused:
-            self.focused_name = event.container.name
-            self.print_blocks()
-        elif event.change == "close":
-            self.focused_name = None
-            self.print_blocks()
+    async def update_focus(self, i3, event):
+        tree = await i3.get_tree()
+        focused = tree.find_focused()
+        if self.output:
+            p = focused
+            while p and p.parent:
+                p = p.parent
+                if p.type == "output" and p.name != self.output:
+                    return
+        orig_focused_name = self.focused_name
+        self.focused_name = focused.name if focused and focused.type == "con" else None
+        if self.focused_name != orig_focused_name:
+            await self.print_blocks()
 
     async def subscribe_i3_events(self):
         i3 = await Connection().connect()
-
-        i3.on(Event.WORKSPACE_FOCUS, self.handle_workspace_event)
-        for event_type in (Event.WINDOW_FOCUS, Event.WINDOW_TITLE, Event.WINDOW_CLOSE):
-            i3.on(event_type, self.handle_window_event)
-
-        tree = await i3.get_tree()
-        focused = tree.find_focused()
-        if focused.type == "con":
-            self.focused_name = focused.name
-        else:
-            self.focused_name = None
+        # TODO: We now need to find the active con on our output here; finding
+        # the currently focused con across all outputs is no longer useful.
+        for e_type in EVENT_TYPES:
+            i3.on(e_type, self.update_focus)
 
     async def exec_status_prog(self, argv):
         status_prog = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
@@ -83,7 +87,7 @@ class i3Bifocals:
             try:
                 s = buf.decode("utf-8").strip("\n,")
                 self.status_blocks = json.loads(s)
-                self.print_blocks()
+                await self.print_blocks()
                 buf.clear()
             except json.decoder.JSONDecodeError:
                 pass
@@ -94,11 +98,15 @@ async def gather(*tasks):
 
 
 if __name__ == "__main__":
-    status_argv = sys.argv[1:] or ["i3status"]
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-o", "--output", type=str, default=None)
+    ap.add_argument("status_argv", nargs="*", default=["i3status"])
+    args = ap.parse_args()
+
     try:
-        bf = i3Bifocals()
+        bf = i3Bifocals(args.output)
         watcher = bf.subscribe_i3_events()
-        runner = bf.exec_status_prog(status_argv)
+        runner = bf.exec_status_prog(args.status_argv)
         asyncio.run(gather(watcher, runner))
     except (KeyboardInterrupt, SystemExit):
         sys.exit(0)

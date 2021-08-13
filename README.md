@@ -29,11 +29,12 @@ from the `i3status` process.
 
 To run (as your `status_command`):
 
-    i3bifocals [STATUS_COMMAND_TO_WRAP]
+    i3bifocals [--output OUTPUT] [STATUS_COMMAND_TO_WRAP]
 
-If no command to wrap is given, `i3status` will be used. I have only
+If no command to wrap is given, `i3status` will be used. If the command
+has options, add `--` before it to stop processing i3bifocals options.
 done a very cursory smoke test with `i3blocks` but anything that outputs
-JSON status lines according to the
+JSON status blocks according to the
 [protocol](https://i3wm.org/docs/i3bar-protocol.html) should work.
 
 JSON is the only supported format. `i3bifocals`'s output will not be
