@@ -15,7 +15,7 @@ class i3Bifocals:
     def print_status(self):
         focus_block = {"name": "focused_con", "full_text": self.focused_name or "-"}
         blocks = [focus_block, *self.status]
-        print(json.dumps(blocks) + ",", flush=True)
+        print(json.dumps(blocks, ensure_ascii=False) + ",", flush=True)
 
     def handle_workspace_event(self, i3, event):
         if event.current.find_focused() is None:
@@ -47,21 +47,20 @@ class i3Bifocals:
     async def exec_i3status(self, argv):
         i3status = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
 
-        # our input and output must start with two very specific things
-        # (see: https://i3wm.org/docs/i3bar-protocol.html).
+        # our input and output must start with two very specific things (see
+        # https://i3wm.org/docs/i3bar-protocol.html). verify that the status
+        # program sent the same header to us.
 
-        print(json.dumps({"version": 1}))
+        print(json.dumps({"version": 1}, indent=None))
         print("[")
-
-        # verify that i3status sent the same header to us.
 
         try:
             header = json.loads(await i3status.stdout.readline())
-            assert header["version"] == 1
         except (json.decoder.JSONDecodeError, ValueError):
             print("could not parse JSON header from i3status! exiting.", file=sys.stderr)
             sys.exit(1)
-        except AssertionError:
+
+        if header["version"] != 1:
             print("got an unknown i3bar protocol version! exiting.", file=sys.stderr)
             sys.exit(1)
 
@@ -70,11 +69,10 @@ class i3Bifocals:
             print("did not read a body from i3status! exiting.", file=sys.stderr)
             sys.exit(1)
 
-        # read until we have a full array (which we know ends with a
-        # close bracket). it is very unlikely we'll need to do multiple
-        # reads between clearing the buffer, since i3status prints one
-        # array per line, but if some other compatible program outputs
-        # pretty-printed JSON it's possible.
+        # read until we have a full array (which we know ends with a close
+        # bracket). it is very unlikely we'll need to do multiple reads between
+        # clearing the buffer, since i3status prints one array per line, but if
+        # some other compatible program outputs pretty-printed JSON it's possible.
 
         buf = bytearray()
         while i3status.returncode is None:
