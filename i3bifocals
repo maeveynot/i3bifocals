@@ -44,8 +44,8 @@ class i3Bifocals:
         else:
             self.focused_name = None
 
-    async def exec_i3status(self, argv):
-        i3status = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
+    async def exec_status_prog(self, argv):
+        status_prog = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
 
         # our input and output must start with two very specific things (see
         # https://i3wm.org/docs/i3bar-protocol.html). verify that the status
@@ -55,18 +55,18 @@ class i3Bifocals:
         print("[")
 
         try:
-            header = json.loads(await i3status.stdout.readline())
+            header = json.loads(await status_prog.stdout.readline())
         except (json.decoder.JSONDecodeError, ValueError):
-            print("could not parse JSON header from i3status! exiting.", file=sys.stderr)
+            print(f"could not parse JSON header from {argv[0]}! exiting.", file=sys.stderr)
             sys.exit(1)
 
         if header["version"] != 1:
             print("got an unknown i3bar protocol version! exiting.", file=sys.stderr)
             sys.exit(1)
 
-        array_start = await i3status.stdout.read(1)
+        array_start = await status_prog.stdout.read(1)
         if array_start != b"[":
-            print("did not read a body from i3status! exiting.", file=sys.stderr)
+            print(f"did not read a body from {argv[0]}! exiting.", file=sys.stderr)
             sys.exit(1)
 
         # read until we have a full array (which we know ends with a close
@@ -75,8 +75,8 @@ class i3Bifocals:
         # some other compatible program outputs pretty-printed JSON it's possible.
 
         buf = bytearray()
-        while i3status.returncode is None:
-            buf += await i3status.stdout.readuntil(b"]")
+        while status_prog.returncode is None:
+            buf += await status_prog.stdout.readuntil(b"]")
             try:
                 s = buf.decode("utf-8").strip("\n,")
                 self.status = json.loads(s)
@@ -87,9 +87,9 @@ class i3Bifocals:
 
 
 async def main():
-    i3status_argv = sys.argv[1:] or ["i3status"]
+    status_argv = sys.argv[1:] or ["i3status"]
     focus = i3Bifocals()
-    tasks = await asyncio.gather(focus.subscribe_i3_events(), focus.exec_i3status(i3status_argv))
+    tasks = await asyncio.gather(focus.subscribe_i3_events(), focus.exec_status_prog(status_argv))
 
 
 if __name__ == "__main__":
