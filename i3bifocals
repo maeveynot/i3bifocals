@@ -9,26 +9,29 @@ from i3ipc import Event
 
 class i3Bifocals:
     def __init__(self):
-        self.status = []
+        self.status_blocks = []
         self.focused_name = None
 
-    def print_status(self):
-        focus_block = {"name": "focused_con", "full_text": self.focused_name or "-"}
-        blocks = [focus_block, *self.status]
+    def print_blocks(self):
+        focus_block = {
+            "name": "focused_con",
+            "full_text": self.focused_name or "-",
+        }
+        blocks = [focus_block, *self.status_blocks]
         print(json.dumps(blocks, ensure_ascii=False) + ",", flush=True)
 
     def handle_workspace_event(self, i3, event):
         if event.current.find_focused() is None:
             self.focused_name = None
-            self.print_status()
+            self.print_blocks()
 
     def handle_window_event(self, i3, event):
         if event.change == "focus" or event.change == "title" and event.container.focused:
             self.focused_name = event.container.name
-            self.print_status()
+            self.print_blocks()
         elif event.change == "close":
             self.focused_name = None
-            self.print_status()
+            self.print_blocks()
 
     async def subscribe_i3_events(self):
         i3 = await Connection().connect()
@@ -79,21 +82,23 @@ class i3Bifocals:
             buf += await status_prog.stdout.readuntil(b"]")
             try:
                 s = buf.decode("utf-8").strip("\n,")
-                self.status = json.loads(s)
-                self.print_status()
+                self.status_blocks = json.loads(s)
+                self.print_blocks()
                 buf.clear()
             except json.decoder.JSONDecodeError:
                 pass
 
 
-async def main():
-    status_argv = sys.argv[1:] or ["i3status"]
-    focus = i3Bifocals()
-    tasks = await asyncio.gather(focus.subscribe_i3_events(), focus.exec_status_prog(status_argv))
+async def gather(*tasks):
+    return await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
+    status_argv = sys.argv[1:] or ["i3status"]
     try:
-        asyncio.run(main())
+        bf = i3Bifocals()
+        watcher = bf.subscribe_i3_events()
+        runner = bf.exec_status_prog(status_argv)
+        asyncio.run(gather(watcher, runner))
     except (KeyboardInterrupt, SystemExit):
         sys.exit(0)
